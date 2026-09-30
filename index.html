@@ -50,7 +50,13 @@
     }
   </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between items-center p-3 sm:p-4">
+<body class="min-h-screen flex flex-col justify-between items-center p-3 sm:p-4 relative">
+
+  <!-- 自動遷移通知用トースト -->
+  <div id="toastNotification" class="fixed top-5 z-50 transform -translate-y-16 opacity-0 transition-all duration-300 pointer-events-none bg-gray-900/90 text-white text-xs font-semibold px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2">
+    <i id="toastIcon" data-lucide="bell" class="w-4 h-4 text-rose-400"></i>
+    <span id="toastMessage">セッション開始</span>
+  </div>
 
   <div class="w-full max-w-md mx-auto flex-1 flex flex-col justify-between pt-2 pb-2">
     
@@ -151,7 +157,7 @@
         </div>
 
         <p class="text-[11px] text-center text-gray-400 mt-2">
-          ポモドーロを完了するたびにドットが積み上がります
+          ポモドーロを完了するたびにドットが自動で積み上がります
         </p>
       </div>
 
@@ -197,7 +203,7 @@
   </div>
 
   <div class="text-[10px] text-gray-300 select-none pb-1">
-    v1.1.1
+    v1.2.0
   </div>
 
   <!-- 設定モーダル -->
@@ -252,7 +258,7 @@
           resolve(db);
         };
         request.onerror = (e) => {
-          showAlert('IndexedDBの接続に失敗しました: ' + e.target.error);
+          showToast('IndexedDB接続失敗');
           reject(e.target.error);
         };
       });
@@ -317,8 +323,21 @@
       });
     }
 
-    function showAlert(msg) {
-      alert(msg);
+    /* 自動スタートを止めないトースト通知 */
+    let toastTimeout = null;
+    function showToast(msg) {
+      const toast = document.getElementById('toastNotification');
+      const toastMsg = document.getElementById('toastMessage');
+      toastMsg.textContent = msg;
+      
+      toast.classList.remove('-translate-y-16', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.add('-translate-y-16', 'opacity-0');
+        toast.classList.remove('translate-y-0', 'opacity-100');
+      }, 3000);
     }
 
     function getLocalDateKey(d = new Date()) {
@@ -426,9 +445,6 @@
       cycleStatusDisplay.textContent = `セット ${currentSetDisplay} / ${targetWorkSets}`;
     }
 
-    /**
-     * タイマーUIの描画更新（時間経過毎に塗りつぶしが減っていく）
-     */
     function updateTimerDisplay() {
       const minutes = Math.floor(timeLeft / 60);
       const seconds = timeLeft % 60;
@@ -440,8 +456,8 @@
       timerProgress.style.strokeDashoffset = offset;
     }
 
-    function setMode(mode) {
-      if (isRunning) toggleTimer();
+    function setMode(mode, autoStart = false) {
+      if (isRunning && !autoStart) toggleTimer();
       currentMode = mode;
       timeLeft = MODES[mode].duration;
       targetEndTime = null;
@@ -469,25 +485,37 @@
       
       updateTimerDisplay();
       updateCycleDisplay();
+
+      if (autoStart) {
+        startTimer();
+      }
     }
 
-    async function onTimerComplete() {
+    function startTimer() {
+      isRunning = true;
+      targetEndTime = Date.now() + timeLeft * 1000;
+      toggleText.textContent = '一時停止';
+      toggleIcon.setAttribute('data-lucide', 'pause');
+      timerWorker.postMessage('start');
+      lucide.createIcons();
+    }
+
+    function pauseTimer() {
       timerWorker.postMessage('stop');
       isRunning = false;
       targetEndTime = null;
       toggleText.textContent = 'スタート';
       toggleIcon.setAttribute('data-lucide', 'play');
       lucide.createIcons();
+    }
 
+    /**
+     * 【改修】タイマー終了時の自動継続処理
+     */
+    async function onTimerComplete() {
       playBeepSound();
 
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('FocusTimer', {
-          body: `${MODES[currentMode].name}が完了しました！`,
-          icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22 width=%22192%22 height=%22192%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23FF2D55%22/><text x=%2250%25%22 y=%2255%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-size=%22100%22 fill=%22white%22>⏱</text></svg>'
-        });
-      }
-
+      // ログ保存
       const finishedMode = currentMode;
       const newLog = {
         id: 'log_' + Date.now(),
@@ -503,18 +531,27 @@
         await renderCalendar();
       }
 
+      // 通知送信
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('FocusTimer', {
+          body: `${MODES[finishedMode].name}が終了しました。次のタイマーを自動スタートします。`,
+          icon: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22 width=%22192%22 height=%22192%22><rect width=%22100%25%22 height=%22100%25%22 fill=%22%23FF2D55%22/><text x=%2250%25%22 y=%2255%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-size=%22100%22 fill=%22white%22>⏱</text></svg>'
+        });
+      }
+
+      // 次のモードへ自動移行して即スタート
       if (finishedMode === 'work') {
         completedWorkSets++;
         if (completedWorkSets % targetWorkSets === 0) {
-          showAlert('🎉 1サイクルの作業が完了しました！長休憩を取りましょう。');
-          setMode('long');
+          showToast('作業完了！長休憩を自動開始しました');
+          setMode('long', true);
         } else {
-          showAlert('👏 作業完了！小休憩でリフレッシュしましょう。');
-          setMode('short');
+          showToast('作業完了！小休憩を自動開始しました');
+          setMode('short', true);
         }
       } else {
-        showAlert('⏰ 休憩終了です！次の作業へ集中していきましょう。');
-        setMode('work');
+        showToast('休憩終了！次の作業を自動開始しました');
+        setMode('work', true);
       }
     }
 
@@ -547,39 +584,27 @@
       }
 
       if (isRunning) {
-        timerWorker.postMessage('stop');
-        isRunning = false;
-        targetEndTime = null;
-        toggleText.textContent = 'スタート';
-        toggleIcon.setAttribute('data-lucide', 'play');
+        pauseTimer();
       } else {
-        isRunning = true;
-        targetEndTime = Date.now() + timeLeft * 1000;
-        toggleText.textContent = '一時停止';
-        toggleIcon.setAttribute('data-lucide', 'pause');
-        timerWorker.postMessage('start');
+        startTimer();
       }
-      lucide.createIcons();
     }
 
     btnToggle.addEventListener('click', toggleTimer);
     btnReset.addEventListener('click', () => {
-      if (isRunning) toggleTimer();
+      if (isRunning) pauseTimer();
       timeLeft = MODES[currentMode].duration;
       targetEndTime = null;
       updateTimerDisplay();
     });
     btnSkip.addEventListener('click', () => {
-      if (isRunning) toggleTimer();
+      const wasRunning = isRunning;
       if (currentMode === 'work') {
         completedWorkSets++;
-        if (completedWorkSets % targetWorkSets === 0) {
-          setMode('long');
-        } else {
-          setMode('short');
-        }
+        const nextMode = (completedWorkSets % targetWorkSets === 0) ? 'long' : 'short';
+        setMode(nextMode, wasRunning);
       } else {
-        setMode('work');
+        setMode('work', wasRunning);
       }
     });
 
@@ -624,7 +649,7 @@
         }
 
         dot.addEventListener('click', () => {
-          showAlert(`【${modeInfo.name}完了】\n時刻: ${formattedTime}\n所要: ${log.durationMinutes}分`);
+          showToast(`${modeInfo.name} (${formattedTime} 完了 / ${log.durationMinutes}分)`);
         });
 
         todayDotsContainer.appendChild(dot);
@@ -828,7 +853,7 @@
     btnSaveSettings.addEventListener('click', async () => {
       const val = parseInt(setsInput.value, 10);
       if (isNaN(val) || val < 1 || val > 16) {
-        showAlert('セット数は1〜16の範囲で指定してください。');
+        showToast('セット数は1〜16の範囲で指定してください');
         return;
       }
       targetWorkSets = val;
