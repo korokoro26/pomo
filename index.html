@@ -197,7 +197,7 @@
   </div>
 
   <div class="text-[10px] text-gray-300 select-none pb-1">
-    v1.5.0
+    v1.6.0
   </div>
 
   <!-- 設定モーダル（サウンド・音量設定） -->
@@ -353,7 +353,6 @@
       });
     }
 
-    /* 自動スタートを止めないトースト通知 */
     let toastTimeout = null;
     function showToast(msg) {
       const toast = document.getElementById('toastNotification');
@@ -377,30 +376,79 @@
       return `${year}-${month}-${day}`;
     }
 
-    /* サウンド設定用ステート */
+    /* ==========================================================
+       スマホ・PWA対応：Web Audio API シングルトン ＆ アンロック処理
+       ========================================================== */
+    let globalAudioCtx = null;
+    let isAudioUnlocked = false;
+
+    function getAudioContext() {
+      if (!globalAudioCtx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) {
+          globalAudioCtx = new AudioCtx();
+        }
+      }
+      return globalAudioCtx;
+    }
+
+    // 画面タップ等のユーザー操作時に呼び出し、ブラウザの音声制限を解除する
+    function unlockAudioContext() {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      if (!isAudioUnlocked) {
+        try {
+          // 極小の無音バッファを再生してiOSのオーディオパイプラインを起動
+          const buffer = ctx.createBuffer(1, 1, 22050);
+          const source = ctx.createBufferSource();
+          source.buffer = buffer;
+          source.connect(ctx.destination);
+          source.start(0);
+          isAudioUnlocked = true;
+        } catch (e) {
+          console.warn('Audio unlock warning:', e);
+        }
+      }
+    }
+
+    // 最初のユーザー操作（タッチまたはクリック）でオーディオをアンロック
+    ['touchstart', 'touchend', 'click', 'keydown'].forEach(evt => {
+      document.addEventListener(evt, unlockAudioContext, { once: true, passive: true });
+    });
+
     let selectedSoundType = 'beep';
     let selectedSoundVolume = 2;
 
     const VOLUME_FACTORS = {
-      1: 0.15,
-      2: 0.35,
-      3: 0.70
+      1: 0.20,
+      2: 0.50,
+      3: 0.90
     };
 
     /**
-     * Web Audio API によるシンセサイズサウンド再生
+     * サウンド再生関数（アンロック済みコンテキストを再利用）
      */
     function playAlarmSound(type = selectedSoundType, volumeLevel = selectedSoundVolume) {
       try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        if (!AudioCtx) return;
-        const ctx = new AudioCtx();
+        const ctx = getAudioContext();
+        if (!ctx) return;
+
         if (ctx.state === 'suspended') {
           ctx.resume();
         }
 
+        // スマホ用バイブレーション連動（対応ブラウザのみ）
+        if ('vibrate' in navigator) {
+          navigator.vibrate([200, 100, 200, 100, 400]);
+        }
+
         const masterGain = ctx.createGain();
-        const baseVol = VOLUME_FACTORS[volumeLevel] || 0.35;
+        const baseVol = VOLUME_FACTORS[volumeLevel] || 0.50;
         masterGain.gain.setValueAtTime(baseVol, ctx.currentTime);
         masterGain.connect(ctx.destination);
 
@@ -417,12 +465,12 @@
           gain.gain.setValueAtTime(1, now);
           gain.gain.setValueAtTime(0.01, now + 0.1);
           gain.gain.setValueAtTime(1, now + 0.12);
-          gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.5);
 
           osc.connect(gain);
           gain.connect(masterGain);
           osc.start(now);
-          osc.stop(now + 0.5);
+          osc.stop(now + 0.55);
 
         } else if (type === 'chime') {
           const freqs = [523.25, 659.25, 783.99, 1046.50];
@@ -434,7 +482,7 @@
 
             gain.gain.setValueAtTime(0.001, now);
             gain.gain.setValueAtTime(0.4, now + (idx * 0.08));
-            gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
 
             osc.connect(gain);
             gain.connect(masterGain);
@@ -451,7 +499,7 @@
             osc.frequency.setValueAtTime(freq, now + (idx * 0.1));
 
             gain.gain.setValueAtTime(0.8, now + (idx * 0.1));
-            gain.exponentialRampToValueAtTime(0.001, now + (idx * 0.1) + 0.25);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + (idx * 0.1) + 0.25);
 
             osc.connect(gain);
             gain.connect(masterGain);
@@ -460,7 +508,7 @@
           });
         }
       } catch (err) {
-        console.warn('Audio Context Error:', err);
+        console.warn('Audio Play Error:', err);
       }
     }
 
@@ -518,9 +566,6 @@
     const todayDotsContainer = document.getElementById('todayDotsContainer');
     const todaySummaryStats = document.getElementById('todaySummaryStats');
 
-    /**
-     * タイマー表示および終了時刻（逆算）の更新
-     */
     function updateTimerDisplay() {
       const minutes = Math.floor(timeLeft / 60);
       const seconds = timeLeft % 60;
@@ -531,7 +576,6 @@
       const offset = CIRCLE_CIRCUMFERENCE * (1 - fraction);
       timerProgress.style.strokeDashoffset = offset;
 
-      // 現在時刻に残り秒数を加えて終了時刻を算出
       const endTimestamp = isRunning && targetEndTime ? targetEndTime : Date.now() + timeLeft * 1000;
       const endObj = new Date(endTimestamp);
       const endH = String(endObj.getHours()).padStart(2, '0');
@@ -565,6 +609,7 @@
     }
 
     function startTimer() {
+      unlockAudioContext(); // タイマー開始操作時に確実にアンロック
       isRunning = true;
       targetEndTime = Date.now() + timeLeft * 1000;
       toggleText.textContent = '一時停止';
@@ -587,7 +632,6 @@
     async function onTimerComplete() {
       playAlarmSound();
 
-      // ログ保存
       const finishedMode = currentMode;
       const newLog = {
         id: 'log_' + Date.now(),
@@ -603,7 +647,6 @@
         await renderCalendar();
       }
 
-      // 通知送信
       if ('Notification' in window && Notification.permission === 'granted') {
         new Notification('FocusTimer', {
           body: `${MODES[finishedMode].name}が終了しました。次のタイマーを自動スタートします。`,
@@ -611,7 +654,6 @@
         });
       }
 
-      // 作業 ↔ 休憩 の交互自動遷移
       if (finishedMode === 'work') {
         showToast('作業完了！休憩を自動開始しました');
         setMode('short', true);
@@ -645,6 +687,7 @@
     });
 
     function toggleTimer() {
+      unlockAudioContext();
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
@@ -658,12 +701,14 @@
 
     btnToggle.addEventListener('click', toggleTimer);
     btnReset.addEventListener('click', () => {
+      unlockAudioContext();
       if (isRunning) pauseTimer();
       timeLeft = MODES[currentMode].duration;
       targetEndTime = null;
       updateTimerDisplay();
     });
     btnSkip.addEventListener('click', () => {
+      unlockAudioContext();
       const wasRunning = isRunning;
       if (currentMode === 'work') {
         setMode('short', wasRunning);
@@ -672,8 +717,14 @@
       }
     });
 
-    btnModeWork.addEventListener('click', () => setMode('work'));
-    btnModeBreak.addEventListener('click', () => setMode('short'));
+    btnModeWork.addEventListener('click', () => {
+      unlockAudioContext();
+      setMode('work');
+    });
+    btnModeBreak.addEventListener('click', () => {
+      unlockAudioContext();
+      setMode('short');
+    });
 
     async function renderTodayDots() {
       const todayKey = getLocalDateKey();
@@ -740,6 +791,7 @@
     let currentSelectedDateKey = getLocalDateKey();
 
     function switchView(view) {
+      unlockAudioContext();
       currentView = view;
       if (view === 'timer') {
         viewTimer.classList.remove('hidden');
@@ -916,6 +968,7 @@
 
     document.querySelectorAll('#soundSelectGroup .sound-opt-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        unlockAudioContext();
         tempSoundType = btn.getAttribute('data-sound');
         updateSoundSelectionUI();
         playAlarmSound(tempSoundType, tempVolumeLevel);
@@ -924,6 +977,7 @@
 
     document.querySelectorAll('#volumeSelectGroup .vol-opt-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        unlockAudioContext();
         tempVolumeLevel = parseInt(btn.getAttribute('data-volume'), 10);
         updateSoundSelectionUI();
         playAlarmSound(tempSoundType, tempVolumeLevel);
@@ -931,10 +985,12 @@
     });
 
     btnPreviewSound.addEventListener('click', () => {
+      unlockAudioContext();
       playAlarmSound(tempSoundType, tempVolumeLevel);
     });
 
     function openSettingsModal() {
+      unlockAudioContext();
       tempSoundType = selectedSoundType;
       tempVolumeLevel = selectedSoundVolume;
       updateSoundSelectionUI();
