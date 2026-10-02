@@ -88,16 +88,9 @@
       
       <div class="bg-white rounded-3xl p-5 shadow-sm border border-gray-100 flex flex-col items-center mb-3">
         <!-- モード切り替えタブ -->
-        <div class="flex bg-gray-100 p-1 rounded-full mb-3 w-full max-w-xs">
+        <div class="flex bg-gray-100 p-1 rounded-full mb-6 w-full max-w-xs">
           <button id="btnModeWork" class="flex-1 py-1.5 text-xs font-semibold rounded-full bg-white shadow-sm text-gray-900 transition-all touch-target">作業</button>
-          <button id="btnModeShort" class="flex-1 py-1.5 text-xs font-semibold rounded-full text-gray-500 hover:text-gray-900 transition-all touch-target">小休憩</button>
-          <button id="btnModeLong" class="flex-1 py-1.5 text-xs font-semibold rounded-full text-gray-500 hover:text-gray-900 transition-all touch-target">長休憩</button>
-        </div>
-
-        <!-- サイクル状態 -->
-        <div class="mb-3 px-3 py-1 bg-gray-50 rounded-full border border-gray-200/60 text-[11px] font-medium text-gray-500 flex items-center gap-1.5">
-          <span id="cycleIndicatorDot" class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
-          <span id="cycleStatusDisplay">セット 1 / 4</span>
+          <button id="btnModeBreak" class="flex-1 py-1.5 text-xs font-semibold rounded-full text-gray-500 hover:text-gray-900 transition-all touch-target">休憩</button>
         </div>
 
         <!-- タイマーリング -->
@@ -109,7 +102,11 @@
           </svg>
           <div class="absolute flex flex-col items-center">
             <span id="timeDisplay" class="text-5xl font-black tracking-tighter text-gray-900 tabular-nums">25:00</span>
-            <span id="currentModeLabel" class="text-xs font-bold text-rose-500 uppercase tracking-widest mt-1">作業中</span>
+            <!-- 終了時刻表示エリア -->
+            <div class="flex items-center gap-1 text-[11px] font-medium text-gray-400 mt-1 tabular-nums">
+              <i data-lucide="bell" class="w-3 h-3 text-gray-400"></i>
+              <span id="endTimeDisplay">--:-- 終了</span>
+            </div>
           </div>
         </div>
 
@@ -146,10 +143,7 @@
               <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>作業(25m)
             </span>
             <span class="flex items-center gap-1">
-              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>小休(5m)
-            </span>
-            <span class="flex items-center gap-1">
-              <span class="w-2.5 h-2.5 rounded-full bg-sky-500"></span>長休(15m)
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>休憩(5m)
             </span>
           </div>
 
@@ -203,28 +197,64 @@
   </div>
 
   <div class="text-[10px] text-gray-300 select-none pb-1">
-    v1.2.0
+    v1.5.0
   </div>
 
-  <!-- 設定モーダル -->
+  <!-- 設定モーダル（サウンド・音量設定） -->
   <div id="settingsModal" class="fixed inset-0 bg-black/30 ios-backdrop z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 hidden opacity-0 transition-opacity duration-200">
-    <div id="settingsModalContent" class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl p-6 shadow-xl transform transition-transform duration-200 translate-y-full sm:translate-y-0">
+    <div id="settingsModalContent" class="bg-white w-full max-w-md rounded-t-3xl sm:rounded-2xl p-6 shadow-xl transform transition-transform duration-200 translate-y-full sm:translate-y-0 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center mb-4">
         <h3 class="text-lg font-bold text-gray-900">タイマー設定</h3>
         <button id="btnCloseSettingsModal" class="touch-target text-gray-400 hover:text-gray-600 flex items-center justify-center">
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
+
       <div>
-        <div class="mb-5">
-          <label class="block text-xs font-semibold text-gray-500 mb-2" for="setsInput">長休憩までの作業セット数</label>
-          <div class="flex items-center gap-3">
-            <input type="number" id="setsInput" min="1" max="16" value="4"
-                   class="w-24 px-3 py-2 border border-gray-200 rounded-xl text-center font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-rose-500">
-            <span class="text-xs text-gray-500">回作業後に長休憩へ移行</span>
+        <!-- アラーム音選択 -->
+        <div class="mb-5 pb-4 border-b border-gray-100">
+          <div class="flex justify-between items-center mb-2">
+            <label class="block text-xs font-semibold text-gray-500">終了アラーム音</label>
+            <button id="btnPreviewSound" type="button" class="text-xs text-rose-500 font-bold flex items-center gap-1 active:scale-95 transition-all">
+              <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+              <span>音を試聴</span>
+            </button>
           </div>
-          <span class="text-[11px] text-gray-400 mt-1 block">※ 1〜16の範囲で設定できます</span>
+          <div class="grid grid-cols-3 gap-2" id="soundSelectGroup">
+            <button type="button" data-sound="beep" class="sound-opt-btn py-2.5 px-2 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all">
+              <i data-lucide="radio" class="w-4 h-4"></i>
+              <span>電子ビープ</span>
+            </button>
+            <button type="button" data-sound="chime" class="sound-opt-btn py-2.5 px-2 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all">
+              <i data-lucide="bell" class="w-4 h-4"></i>
+              <span>チャイム</span>
+            </button>
+            <button type="button" data-sound="marimba" class="sound-opt-btn py-2.5 px-2 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all">
+              <i data-lucide="music" class="w-4 h-4"></i>
+              <span>マリンバ</span>
+            </button>
+          </div>
         </div>
+
+        <!-- 音量調整 (3段階) -->
+        <div class="mb-6">
+          <label class="block text-xs font-semibold text-gray-500 mb-2">アラーム音量</label>
+          <div class="flex bg-gray-100 p-1 rounded-xl" id="volumeSelectGroup">
+            <button type="button" data-volume="1" class="vol-opt-btn flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1">
+              <i data-lucide="volume" class="w-3.5 h-3.5"></i>
+              <span>小</span>
+            </button>
+            <button type="button" data-volume="2" class="vol-opt-btn flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1">
+              <i data-lucide="volume-1" class="w-3.5 h-3.5"></i>
+              <span>中</span>
+            </button>
+            <button type="button" data-volume="3" class="vol-opt-btn flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1">
+              <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+              <span>大</span>
+            </button>
+          </div>
+        </div>
+
         <div class="flex gap-2">
           <button type="button" id="btnCancelSettings" class="touch-target flex-1 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-600 active:bg-gray-50 transition-colors">キャンセル</button>
           <button type="button" id="btnSaveSettings" class="touch-target flex-1 py-2.5 rounded-xl bg-rose-500 text-sm font-medium text-white hover:bg-rose-600 active:scale-98 transition-all">保存</button>
@@ -347,28 +377,90 @@
       return `${year}-${month}-${day}`;
     }
 
-    function playBeepSound() {
+    /* サウンド設定用ステート */
+    let selectedSoundType = 'beep';
+    let selectedSoundVolume = 2;
+
+    const VOLUME_FACTORS = {
+      1: 0.15,
+      2: 0.35,
+      3: 0.70
+    };
+
+    /**
+     * Web Audio API によるシンセサイズサウンド再生
+     */
+    function playAlarmSound(type = selectedSoundType, volumeLevel = selectedSoundVolume) {
       try {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         if (!AudioCtx) return;
         const ctx = new AudioCtx();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+        if (ctx.state === 'suspended') {
+          ctx.resume();
+        }
 
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        osc.frequency.setValueAtTime(1174.66, ctx.currentTime + 0.15);
+        const masterGain = ctx.createGain();
+        const baseVol = VOLUME_FACTORS[volumeLevel] || 0.35;
+        masterGain.gain.setValueAtTime(baseVol, ctx.currentTime);
+        masterGain.connect(ctx.destination);
 
-        gain.gain.setValueAtTime(0.3, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        const now = ctx.currentTime;
 
-        osc.connect(gain);
-        gain.connect(ctx.destination);
+        if (type === 'beep') {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
 
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.5);
+          osc.frequency.setValueAtTime(880, now);
+          osc.frequency.setValueAtTime(1174.66, now + 0.12);
+
+          gain.gain.setValueAtTime(1, now);
+          gain.gain.setValueAtTime(0.01, now + 0.1);
+          gain.gain.setValueAtTime(1, now + 0.12);
+          gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+
+          osc.connect(gain);
+          gain.connect(masterGain);
+          osc.start(now);
+          osc.stop(now + 0.5);
+
+        } else if (type === 'chime') {
+          const freqs = [523.25, 659.25, 783.99, 1046.50];
+          freqs.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, now + (idx * 0.08));
+
+            gain.gain.setValueAtTime(0.001, now);
+            gain.gain.setValueAtTime(0.4, now + (idx * 0.08));
+            gain.exponentialRampToValueAtTime(0.0001, now + 1.2);
+
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start(now + (idx * 0.08));
+            osc.stop(now + 1.3);
+          });
+
+        } else if (type === 'marimba') {
+          const notes = [440, 659.25, 880];
+          notes.forEach((freq, idx) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(freq, now + (idx * 0.1));
+
+            gain.gain.setValueAtTime(0.8, now + (idx * 0.1));
+            gain.exponentialRampToValueAtTime(0.001, now + (idx * 0.1) + 0.25);
+
+            osc.connect(gain);
+            gain.connect(masterGain);
+            osc.start(now + (idx * 0.1));
+            osc.stop(now + (idx * 0.1) + 0.3);
+          });
+        }
       } catch (err) {
-        console.warn('Audio Context error:', err);
+        console.warn('Audio Context Error:', err);
       }
     }
 
@@ -395,22 +487,13 @@
         name: '作業', 
         duration: 25 * 60,
         color: '#FF2D55', 
-        dotBg: 'bg-rose-500', 
-        label: '作業中'
+        dotBg: 'bg-rose-500'
       },
       short: { 
-        name: '小休憩', 
+        name: '休憩', 
         duration: 5 * 60,
         color: '#34C759', 
-        dotBg: 'bg-emerald-400', 
-        label: '小休憩中'
-      },
-      long: { 
-        name: '長休憩', 
-        duration: 15 * 60,
-        color: '#007AFF', 
-        dotBg: 'bg-sky-500', 
-        label: 'リフレッシュ'
+        dotBg: 'bg-emerald-400'
       }
     };
 
@@ -418,33 +501,26 @@
     let timeLeft = MODES.work.duration;
     let targetEndTime = null;
     let isRunning = false;
-    let targetWorkSets = 4;
-    let completedWorkSets = 0;
 
     const CIRCLE_CIRCUMFERENCE = 2 * Math.PI * 45;
 
     const timeDisplay = document.getElementById('timeDisplay');
+    const endTimeDisplay = document.getElementById('endTimeDisplay');
     const timerProgress = document.getElementById('timerProgress');
-    const currentModeLabel = document.getElementById('currentModeLabel');
     const btnToggle = document.getElementById('btnToggle');
     const toggleIcon = document.getElementById('toggleIcon');
     const toggleText = document.getElementById('toggleText');
     const btnReset = document.getElementById('btnReset');
     const btnSkip = document.getElementById('btnSkip');
-    const cycleStatusDisplay = document.getElementById('cycleStatusDisplay');
-    const cycleIndicatorDot = document.getElementById('cycleIndicatorDot');
 
     const btnModeWork = document.getElementById('btnModeWork');
-    const btnModeShort = document.getElementById('btnModeShort');
-    const btnModeLong = document.getElementById('btnModeLong');
+    const btnModeBreak = document.getElementById('btnModeBreak');
     const todayDotsContainer = document.getElementById('todayDotsContainer');
     const todaySummaryStats = document.getElementById('todaySummaryStats');
 
-    function updateCycleDisplay() {
-      const currentSetDisplay = (completedWorkSets % targetWorkSets) + 1;
-      cycleStatusDisplay.textContent = `セット ${currentSetDisplay} / ${targetWorkSets}`;
-    }
-
+    /**
+     * タイマー表示および終了時刻（逆算）の更新
+     */
     function updateTimerDisplay() {
       const minutes = Math.floor(timeLeft / 60);
       const seconds = timeLeft % 60;
@@ -454,6 +530,13 @@
       const fraction = timeLeft / total;
       const offset = CIRCLE_CIRCUMFERENCE * (1 - fraction);
       timerProgress.style.strokeDashoffset = offset;
+
+      // 現在時刻に残り秒数を加えて終了時刻を算出
+      const endTimestamp = isRunning && targetEndTime ? targetEndTime : Date.now() + timeLeft * 1000;
+      const endObj = new Date(endTimestamp);
+      const endH = String(endObj.getHours()).padStart(2, '0');
+      const endM = String(endObj.getMinutes()).padStart(2, '0');
+      endTimeDisplay.textContent = `${endH}:${endM} 終了`;
     }
 
     function setMode(mode, autoStart = false) {
@@ -463,28 +546,18 @@
       targetEndTime = null;
 
       timerProgress.setAttribute('stroke', MODES[mode].color);
-      currentModeLabel.textContent = MODES[mode].label;
-      currentModeLabel.style.color = MODES[mode].color;
-      cycleIndicatorDot.style.backgroundColor = MODES[mode].color;
       
       if (mode === 'work') {
         btnToggle.className = 'touch-target px-9 py-3.5 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-full shadow-lg shadow-rose-200 active:scale-95 transition-all flex items-center gap-2';
-      } else if (mode === 'short') {
-        btnToggle.className = 'touch-target px-9 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-full shadow-lg shadow-emerald-200 active:scale-95 transition-all flex items-center gap-2';
+        btnModeWork.className = 'flex-1 py-1.5 text-xs font-semibold rounded-full bg-white shadow-sm text-gray-900 transition-all touch-target';
+        btnModeBreak.className = 'flex-1 py-1.5 text-xs font-semibold rounded-full text-gray-500 hover:text-gray-900 transition-all touch-target';
       } else {
-        btnToggle.className = 'touch-target px-9 py-3.5 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-full shadow-lg shadow-sky-200 active:scale-95 transition-all flex items-center gap-2';
+        btnToggle.className = 'touch-target px-9 py-3.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-full shadow-lg shadow-emerald-200 active:scale-95 transition-all flex items-center gap-2';
+        btnModeBreak.className = 'flex-1 py-1.5 text-xs font-semibold rounded-full bg-white shadow-sm text-gray-900 transition-all touch-target';
+        btnModeWork.className = 'flex-1 py-1.5 text-xs font-semibold rounded-full text-gray-500 hover:text-gray-900 transition-all touch-target';
       }
-
-      [btnModeWork, btnModeShort, btnModeLong].forEach(btn => {
-        btn.classList.remove('bg-white', 'shadow-sm', 'text-gray-900');
-        btn.classList.add('text-gray-500');
-      });
-      if (mode === 'work') btnModeWork.classList.add('bg-white', 'shadow-sm', 'text-gray-900');
-      if (mode === 'short') btnModeShort.classList.add('bg-white', 'shadow-sm', 'text-gray-900');
-      if (mode === 'long') btnModeLong.classList.add('bg-white', 'shadow-sm', 'text-gray-900');
       
       updateTimerDisplay();
-      updateCycleDisplay();
 
       if (autoStart) {
         startTimer();
@@ -498,6 +571,7 @@
       toggleIcon.setAttribute('data-lucide', 'pause');
       timerWorker.postMessage('start');
       lucide.createIcons();
+      updateTimerDisplay();
     }
 
     function pauseTimer() {
@@ -507,13 +581,11 @@
       toggleText.textContent = 'スタート';
       toggleIcon.setAttribute('data-lucide', 'play');
       lucide.createIcons();
+      updateTimerDisplay();
     }
 
-    /**
-     * 【改修】タイマー終了時の自動継続処理
-     */
     async function onTimerComplete() {
-      playBeepSound();
+      playAlarmSound();
 
       // ログ保存
       const finishedMode = currentMode;
@@ -539,18 +611,12 @@
         });
       }
 
-      // 次のモードへ自動移行して即スタート
+      // 作業 ↔ 休憩 の交互自動遷移
       if (finishedMode === 'work') {
-        completedWorkSets++;
-        if (completedWorkSets % targetWorkSets === 0) {
-          showToast('作業完了！長休憩を自動開始しました');
-          setMode('long', true);
-        } else {
-          showToast('作業完了！小休憩を自動開始しました');
-          setMode('short', true);
-        }
+        showToast('作業完了！休憩を自動開始しました');
+        setMode('short', true);
       } else {
-        showToast('休憩終了！次の作業を自動開始しました');
+        showToast('休憩終了！作業を自動開始しました');
         setMode('work', true);
       }
     }
@@ -600,17 +666,14 @@
     btnSkip.addEventListener('click', () => {
       const wasRunning = isRunning;
       if (currentMode === 'work') {
-        completedWorkSets++;
-        const nextMode = (completedWorkSets % targetWorkSets === 0) ? 'long' : 'short';
-        setMode(nextMode, wasRunning);
+        setMode('short', wasRunning);
       } else {
         setMode('work', wasRunning);
       }
     });
 
     btnModeWork.addEventListener('click', () => setMode('work'));
-    btnModeShort.addEventListener('click', () => setMode('short'));
-    btnModeLong.addEventListener('click', () => setMode('long'));
+    btnModeBreak.addEventListener('click', () => setMode('short'));
 
     async function renderTodayDots() {
       const todayKey = getLocalDateKey();
@@ -818,16 +881,64 @@
       selectedDateTotal.textContent = `作業 ${workCount}回 (${totalMinutes}分)`;
     }
 
+    /* 設定モーダル関連ロジック */
     const settingsModal = document.getElementById('settingsModal');
     const settingsModalContent = document.getElementById('settingsModalContent');
     const btnOpenSettingsModal = document.getElementById('btnOpenSettingsModal');
     const btnCloseSettingsModal = document.getElementById('btnCloseSettingsModal');
     const btnCancelSettings = document.getElementById('btnCancelSettings');
     const btnSaveSettings = document.getElementById('btnSaveSettings');
-    const setsInput = document.getElementById('setsInput');
+    const btnPreviewSound = document.getElementById('btnPreviewSound');
+
+    let tempSoundType = 'beep';
+    let tempVolumeLevel = 2;
+
+    function updateSoundSelectionUI() {
+      document.querySelectorAll('#soundSelectGroup .sound-opt-btn').forEach(btn => {
+        const snd = btn.getAttribute('data-sound');
+        if (snd === tempSoundType) {
+          btn.className = 'sound-opt-btn py-2.5 px-2 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all border-rose-500 bg-rose-50/60 text-rose-600 shadow-sm';
+        } else {
+          btn.className = 'sound-opt-btn py-2.5 px-2 rounded-xl border text-xs font-semibold flex flex-col items-center gap-1 transition-all border-gray-200 text-gray-600 hover:bg-gray-50';
+        }
+      });
+
+      document.querySelectorAll('#volumeSelectGroup .vol-opt-btn').forEach(btn => {
+        const vol = parseInt(btn.getAttribute('data-volume'), 10);
+        if (vol === tempVolumeLevel) {
+          btn.className = 'vol-opt-btn flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-1 bg-white text-gray-900 shadow-sm';
+        } else {
+          btn.className = 'vol-opt-btn flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1 text-gray-500 hover:text-gray-900';
+        }
+      });
+      lucide.createIcons();
+    }
+
+    document.querySelectorAll('#soundSelectGroup .sound-opt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tempSoundType = btn.getAttribute('data-sound');
+        updateSoundSelectionUI();
+        playAlarmSound(tempSoundType, tempVolumeLevel);
+      });
+    });
+
+    document.querySelectorAll('#volumeSelectGroup .vol-opt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        tempVolumeLevel = parseInt(btn.getAttribute('data-volume'), 10);
+        updateSoundSelectionUI();
+        playAlarmSound(tempSoundType, tempVolumeLevel);
+      });
+    });
+
+    btnPreviewSound.addEventListener('click', () => {
+      playAlarmSound(tempSoundType, tempVolumeLevel);
+    });
 
     function openSettingsModal() {
-      setsInput.value = targetWorkSets;
+      tempSoundType = selectedSoundType;
+      tempVolumeLevel = selectedSoundVolume;
+      updateSoundSelectionUI();
+
       settingsModal.classList.remove('hidden');
       setTimeout(() => {
         settingsModal.classList.remove('opacity-0');
@@ -851,23 +962,23 @@
     });
 
     btnSaveSettings.addEventListener('click', async () => {
-      const val = parseInt(setsInput.value, 10);
-      if (isNaN(val) || val < 1 || val > 16) {
-        showToast('セット数は1〜16の範囲で指定してください');
-        return;
-      }
-      targetWorkSets = val;
-      await saveSetting('targetWorkSets', targetWorkSets);
-      updateCycleDisplay();
+      selectedSoundType = tempSoundType;
+      selectedSoundVolume = tempVolumeLevel;
+
+      await saveSetting('alarmSoundType', selectedSoundType);
+      await saveSetting('alarmSoundVolume', selectedSoundVolume);
+
       hideSettingsModal();
+      showToast('設定を保存しました');
     });
 
     window.addEventListener('DOMContentLoaded', async () => {
       lucide.createIcons();
       await initDB();
-      targetWorkSets = await getSetting('targetWorkSets', 4);
+      selectedSoundType = await getSetting('alarmSoundType', 'beep');
+      selectedSoundVolume = await getSetting('alarmSoundVolume', 2);
+
       updateTimerDisplay();
-      updateCycleDisplay();
       await renderTodayDots();
     });
   </script>
